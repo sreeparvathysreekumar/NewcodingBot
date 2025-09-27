@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Intelligent Pesticide Sprinkling System — Simulation</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root{
+      --green: #388e3c;
+      --dark: #263238;
+      --bg: #f5f7fa;
+      --card: #fff;
+    }
+    body{
+      font-family: Inter, Arial, sans-serif;
+      background: var(--bg);
+      margin: 0;
+      padding: 24px;
+      color: var(--dark);
+    }
+    .wrap{
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:18px;
+      flex-wrap: wrap;
+    }
+    h1{ margin:0; color:var(--green); font-size:20px; }
+    .controls {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap: wrap;
+    }
+    button{
+      background:var(--green);
+      color:white;
+      border:none;
+      padding:10px 14px;
+      border-radius:8px;
+      cursor:pointer;
+      font-weight:600;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #2e7d32;
+    }
+    button.secondary{
+      background:#607d8b;
+    }
+    button.secondary:hover {
+      background: #546e7a;
+    }
+    button:disabled {
+      background: #a5d6a7;
+      cursor: not-allowed;
+    }
+    .card{
+      background:var(--card);
+      border-radius:10px;
+      padding:14px;
+      box-shadow: 0 6px 18px rgba(10,20,30,0.06);
+      margin-bottom:16px;
+    }
+    .flex{
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+    }
+    .left { flex: 1 1 420px; }
+    .right { flex: 1 1 640px; }
+    .row { display:flex; gap:12px; margin-bottom:12px; }
+    label{ font-size:13px; color:#37474f; }
+    input[type="checkbox"]{ transform:scale(1.2); margin-right:6px; }
+    .small{ font-size:13px; color:#546e7a; }
+    table{ width:100%; border-collapse: collapse; font-size:13px; }
+    th,td{ border:1px solid #e0e6ea; padding:8px; text-align:center; }
+    th{ background:#f0f3f5; color:#263238; }
+    .spray{ color:green; font-weight:700; }
+    .nospray{ color:red; font-weight:700; }
+    .stats{
+      display:flex;
+      gap:12px;
+      margin-top:8px;
+      flex-wrap:wrap;
+    }
+    .stat{
+      background:#f8fafb;
+      padding:8px 12px;
+      border-radius:8px;
+      font-weight:600;
+    }
+    footer{ text-align:center; color:#607d8b; margin-top:18px; font-size:13px; }
+    
+    /* Responsive improvements */
+    @media (max-width: 768px) {
+      .flex{ flex-direction:column; }
+      header { flex-direction: column; align-items: flex-start; }
+      .controls { margin-top: 10px; }
+      table { font-size: 12px; }
+      th, td { padding: 6px 4px; }
+      .stats { justify-content: center; }
+    }
+    
+    @media (max-width: 480px) {
+      body { padding: 12px; }
+      .card { padding: 10px; }
+      .row { flex-direction: column; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🌱 Intelligent Pesticide Sprinkling — Simulation</h1>
+      <div class="controls">
+        <button id="runBtn">▶ Run Simulation Cycle</button>
+        <button id="clearBtn" class="secondary">Clear Logs</button>
+        <label class="small"><input type="checkbox" id="autoRun"> Auto Run</label>
+        <label class="small">Interval (ms): <input id="intervalInput" type="number" value="1500" style="width:90px; margin-left:6px;"></label>
+      </div>
+    </header>
+
+    <div class="card flex">
+      <div class="left">
+        <h3 style="margin-top:0">Simulation Controls & Settings</h3>
+
+        <div class="row">
+          <div style="flex:1">
+            <label>Confidence Threshold (0–1)</label><br>
+            <input id="confThreshold" type="range" min="0" max="1" step="0.01" value="0.70">
+            <div class="small">Current: <span id="confValue">0.70</span></div>
+          </div>
+
+          <div style="width:140px">
+            <label>Min Infection %</label><br>
+            <input id="minArea" type="number" value="10" min="0" style="width:100%;">
+            <div class="small">Minimum area to spray</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div style="flex:1">
+            <label>Auto-simulate Sensor Conditions</label>
+            <div class="small">Temperature & Humidity are randomized each cycle; rain chance is 20%.</div>
+          </div>
+        </div>
+
+        <h4 style="margin-bottom:6px">Stats</h4>
+        <div class="stats" id="statBoxes">
+          <div class="stat">Cycles: <span id="statCycles">0</span></div>
+          <div class="stat">Sprays: <span id="statSprays">0</span></div>
+          <div class="stat">Avg Confidence: <span id="statAvgConf">0%</span></div>
+        </div>
+      </div>
+
+      <div class="right">
+        <h3 style="margin-top:0">Live Chart</h3>
+        <canvas id="chartCanvas" height="200"></canvas>
+        <div class="small" style="margin-top:8px">Blue = Infection %, Orange = Spray event (1 if sprayed)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Event Log</h3>
+      <table id="logTable">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Disease</th>
+            <th>Confidence</th>
+            <th>Infection %</th>
+            <th>Temp (°C)</th>
+            <th>Humidity (%)</th>
+            <th>Rain</th>
+            <th>Action</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <footer>Tip: Use Auto Run for continuous demo mode. Clear logs to restart stats.</footer>
+  </div>
+
+<script>
+  // --- Configuration & State ---
+  const SPRAY_DURATIONS = {
+    "Healthy": 0,
+    "Early_Blight": 0.5,
+    "Late_Blight": 1.5,
+    "Bacterial_Spot": 1.0
+  };
+
+  let state = {
+    cycles: 0,
+    sprays: 0,
+    totalConfidence: 0,
+    autoRunTimer: null,
+    chartMaxPoints: 40
+  };
+
+  // --- Helpers ---
+  function random(min, max) { return Math.random() * (max - min) + min; }
+  function randomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+  function mockSensorData() {
+    return {
+      temp: parseFloat(random(12, 36).toFixed(1)),
+      humidity: parseFloat(random(45, 96).toFixed(1)),
+      rain: Math.random() < 0.20
+    };
+  }
+
+  function mockVisionModel() {
+    const scenarios = [
+      ["Late_Blight", random(0.85, 0.98), randomInt(30, 60)],
+      ["Healthy", random(0.90, 1.00), 0],
+      ["Early_Blight", random(0.55, 0.82), randomInt(8, 30)],
+      ["Bacterial_Spot", random(0.75, 0.95), randomInt(5, 20)]
+    ];
+    return scenarios[randomInt(0, scenarios.length - 1)];
+  }
+
+  // --- DOM Elements ---
+  const runBtn = document.getElementById('runBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const autoRunCheck = document.getElementById('autoRun');
+  const intervalInput = document.getElementById('intervalInput');
+  const confRange = document.getElementById('confThreshold');
+  const confValue = document.getElementById('confValue');
+  const minAreaInput = document.getElementById('minArea');
+
+  const statCycles = document.getElementById('statCycles');
+  const statSprays = document.getElementById('statSprays');
+  const statAvgConf = document.getElementById('statAvgConf');
+
+  const tbody = document.querySelector('#logTable tbody');
+
+  // --- Chart setup (Chart.js) ---
+  const ctx = document.getElementById('chartCanvas').getContext('2d');
+  const chartData = {
+    labels: [],
+    datasets: [
+      {
+        type: 'line',
+        label: 'Infection %',
+        data: [],
+        borderWidth: 2,
+        tension: 0.25,
+        borderColor: 'rgba(54, 162, 235, 1)',
+        backgroundColor: 'rgba(54, 162, 235, 0.08)',
+        yAxisID: 'y',
+        fill: true
+      },
+      {
+        type: 'bar',
+        label: 'Spray Event',
+        data: [],
+        borderWidth: 0,
+        yAxisID: 'y1',
+        barPercentage: 0.4,
+        backgroundColor: 'rgba(255, 159, 64, 0.7)'
+      }
+    ]
+  };
+
+  const myChart = new Chart(ctx, {
+    data: chartData,
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      stacked: false,
+      scales: {
+        y: { 
+          beginAtZero: true, 
+          max: 100, 
+          title: { display: true, text: 'Infection %' },
+          grid: {
+            color: 'rgba(0,0,0,0.05)'
+          }
+        },
+        y1: { 
+          beginAtZero: true, 
+          max: 1, 
+          position: 'right', 
+          ticks: { stepSize: 1 }, 
+          title: { display: true, text: 'Spray (1=yes)' },
+          grid: {
+            display: false
+          }
+        },
+        x: {
+          grid: {
+            color: 'rgba(0,0,0,0.05)'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top'
+        }
+      }
+    }
+  });
+
+  // --- Functions ---
+  function updateStats() {
+    statCycles.textContent = state.cycles;
+    statSprays.textContent = state.sprays;
+    const avg = state.cycles ? (state.totalConfidence / state.cycles * 100) : 0;
+    statAvgConf.textContent = avg.toFixed(1) + '%'; // Fixed the template literal syntax error
+  }
+
+  function addLogRow(time, disease, confidence, area, env, spray, reason) {
+    const row = document.createElement('tr');
+    const confPct = (confidence * 100).toFixed(1) + '%';
+    row.innerHTML = `
+      <td>${time}</td>
+      <td>${disease}</td>
+      <td>${confPct}</td>
+      <td>${area}%</td>
+      <td>${env.temp.toFixed(1)}</td>
+      <td>${env.humidity.toFixed(1)}</td>
+      <td>${env.rain ? 'Yes' : 'No'}</td>
+      <td class="${spray ? 'spray' : 'nospray'}">${spray ? 'SPRAY' : 'NO SPRAY'}</td>
+      <td style="text-align:left">${reason}</td>
+    `;
+    tbody.prepend(row);
+  }
+
+  function pushChart(infectionPct, sprayFlag) {
+    const label = new Date().toLocaleTimeString();
+    chartData.labels.push(label);
+    chartData.datasets[0].data.push(infectionPct);
+    chartData.datasets[1].data.push(sprayFlag ? 1 : 0);
+
+    // Keep dataset length manageable
+    while (chartData.labels.length > state.chartMaxPoints) {
+      chartData.labels.shift();
+      chartData.datasets[0].data.shift();
+      chartData.datasets[1].data.shift();
+    }
+    myChart.update();
+  }
+
+  function runSimulationCycle() {
+    const confThreshold = parseFloat(confRange.value);
+    const minArea = parseFloat(minAreaInput.value);
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString();
+
+    const env = mockSensorData();
+    const [disease, confidence, area] = mockVisionModel();
+
+    let spray = false;
+    let reason = '';
+
+    if (disease === 'Healthy') {
+      reason = 'Plant is healthy.';
+    } else if (confidence < confThreshold) {
+      reason = 'Low confidence (' + (confidence*100).toFixed(1) + '%).'; // Fixed template literal
+    } else if (area < minArea) {
+      reason = 'Infection area (' + area + '%) below threshold.'; // Fixed template literal
+    } else if (env.rain || env.humidity > 85) {
+      reason = 'Too wet/humid for spraying.';
+    } else if (env.temp < 12) {
+      reason = 'Temperature too low for spraying.';
+    } else {
+      spray = true;
+      const duration = Math.min(3, (SPRAY_DURATIONS[disease] || 1) * (area / 30));
+      reason = 'Spray triggered for ' + duration.toFixed(2) + 's (Temp:' + env.temp.toFixed(1) + '°C Hum:' + env.humidity.toFixed(1) + '%).'; // Fixed template literal
+    }
+
+    // update state & UI
+    state.cycles += 1;
+    state.totalConfidence += confidence;
+    if (spray) state.sprays += 1;
+    updateStats();
+
+    addLogRow(timeStr, disease, confidence, area, env, spray, reason);
+    pushChart(area, spray);
+  }
+
+  function startAutoRun() {
+    stopAutoRun();
+    const interval = Math.max(300, parseInt(intervalInput.value, 10) || 1500);
+    state.autoRunTimer = setInterval(runSimulationCycle, interval);
+    runBtn.disabled = true;
+  }
+
+  function stopAutoRun() {
+    if (state.autoRunTimer) {
+      clearInterval(state.autoRunTimer);
+      state.autoRunTimer = null;
+    }
+    runBtn.disabled = false;
+  }
+
+  // --- Event wiring ---
+  confRange.addEventListener('input', () => {
+    confValue.textContent = parseFloat(confRange.value).toFixed(2);
+  });
+
+  runBtn.addEventListener('click', runSimulationCycle);
+
+  clearBtn.addEventListener('click', () => {
+    // reset UI and state
+    tbody.innerHTML = '';
+    chartData.labels.length = 0;
+    chartData.datasets[0].data.length = 0;
+    chartData.datasets[1].data.length = 0;
+    myChart.update();
+    state.cycles = 0;
+    state.sprays = 0;
+    state.totalConfidence = 0;
+    updateStats();
+  });
+
+  autoRunCheck.addEventListener('change', () => {
+    if (autoRunCheck.checked) startAutoRun();
+    else stopAutoRun();
+  });
+
+  intervalInput.addEventListener('change', () => {
+    if (autoRunCheck.checked) {
+      startAutoRun(); // restart with new interval
+    }
+  });
+
+  // initialize display
+  document.addEventListener('DOMContentLoaded', () => {
+    confValue.textContent = parseFloat(confRange.value).toFixed(2);
+    updateStats();
+    myChart.update();
+  });
+</script>
+</body>
+</html>
